@@ -1,6 +1,6 @@
 {
   "name": "cbt-wireshark",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "CANBus Triple to Pipe for use with Wireshark Network analyzer",
   "main": "index.js",
   "scripts": {
