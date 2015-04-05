@@ -1,0 +1,30 @@
+{
+  "name": "cbt-wireshark",
+  "version": "1.0.0",
+  "description": "CANBus Triple to Pipe for use with Wireshark Network analyzer",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CANBus-Triple/CANBus-Triple-Wireshark.git"
+  },
+  "keywords": [
+    "cbt",
+    "canbus",
+    "canbustriple",
+    "wireshark",
+    "socketcan"
+  ],
+  "author": "Derek Kuschel <etx313@gmail.com> (http://thefdbureau.com)",
+  "license": "Apache 2.0",
+  "bugs": {
+    "url": "https://github.com/CANBus-Triple/CANBus-Triple-Wireshark/issues"
+  },
+  "homepage": "https://github.com/CANBus-Triple/CANBus-Triple-Wireshark",
+  "dependencies": {
+    "q": "^1.2.0",
+    "serialport": "^1.6.3"
+  }
+}
