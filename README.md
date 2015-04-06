@@ -16,7 +16,7 @@ run: ``node index.js /dev/cu.usbmodem1421``
 * Click **Manage Interfaces** Button 
 * Select the **Pipes** Tab
 * Click the **New** button
-* Enter '/tmp/cbtbus1' 
+* Enter '/tmp/cbtbus1' for Linux/Unix/MacOS or '\\?\pipe\cbtbus1' for Windows (Windows needs testing!)
 * Click **Save** then **Close**
 
 ![Wireshark Setup](http://res.cloudinary.com/ddbgan4vk/image/upload/c_scale,w_720/v1428254840/ws-adapter-cfg_nckv0a.png)
