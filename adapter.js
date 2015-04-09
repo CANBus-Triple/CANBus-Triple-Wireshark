@@ -18,10 +18,10 @@ function init( s, d ){
 
   debug = !!d;
 
-  if( s.path && s.bufferSize )
+  if( s.path )
     serialPort = s;
   else {
-    console.error( 'init() requires a port path or instance of SerialPort module' );
+    console.error( 'init() requires an instance of the SerialPort module' );
     return 0;
   }
 
