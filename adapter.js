@@ -122,9 +122,24 @@ server.listen(pipe, function(){
   console.log('Socket bound: '+pipe);
 });
 
+// listen for TERM signal .e.g. kill
+process.on('SIGTERM', gracefulShutdown);
+
+// listen for INT signal e.g. Ctrl-C
+process.on('SIGINT', gracefulShutdown);
+
+// Regular Exit
+// process.on('exit', gracefulShutdown);
 
 
 
+
+function gracefulShutdown(){
+  console.log('About to exit, closing server.');
+  server.close();
+
+  process.exit();
+}
 
 
 
