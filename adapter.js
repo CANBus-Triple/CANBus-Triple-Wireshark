@@ -8,9 +8,30 @@
 
 
 var net = require('net'),
+    fs  = require('fs'),
     Q = require('q'),
     debug = false,
-    serialPort;
+    serialPort,
+    pipes = process.platform == 'win32' ?
+                                [
+                                  '\\\\?\\pipe\\cbtbus1',
+                                  '\\\\?\\pipe\\cbtbus2',
+                                  '\\\\?\\pipe\\cbtbus3'
+                                ]:[
+                                  '/tmp/cbtbus1',
+                                  '/tmp/cbtbus2',
+                                  '/tmp/cbtbus3'
+                                ],
+    pcapHeader = new Buffer( [0xa1, 0xb2, 0xc3, 0xd4, // Magic number [Big Endian]
+                                  0x00, 0x02, 0x00, 0x04, // Version (2.4)
+                                  0x00, 0x00, 0x00, 0x00, // thiszone
+                                  0x00, 0x00, 0x00, 0x00, // GMT timezone
+                                  0x00, 0x00, 0xFF, 0xFF, // Snapshot Length
+                                  0x00, 0x00, 0x00, 0xE3, // network type (227 for SocketCAN)
+                                ]),
+    sockets = [],
+    servers = [];
+
 
 
 
@@ -25,39 +46,46 @@ function init( s, d ){
     return 0;
   }
 
+  if( serialPort.readable )
+    setup();
+  else
+    serialPort.on("open", setup);
 
-  serialPort.on("open", function () {
+  return pipes;
 
-    serialPort.flush();
 
-    serialPort.on('data', function(data) {
-      var readPacket = new Buffer(data, 'ascii');
+}
 
-      if( readPacket[0] == 0x03 )
-        writePacket( readPacket );
+function setup(){
 
+  serialPort.flush();
+
+  serialPort.on('data', handleSerialData);
+
+
+  // Enable logging on all three busses
+  var logCmd = [
+    [0x03, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00],
+    [0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00],
+    [0x03, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00]
+  ];
+
+  writeSerial( logCmd[0] )
+    .then(function(r){
+      return writeSerial( logCmd[1] );
+    })
+    .then(function(r){
+      return writeSerial( logCmd[2] );
+    }).then(function(){
+      console.log('Logging enabled on all three busses');
     });
+}
 
 
-    // Enable logging on all three busses
-    var logCmd = [
-      [0x03, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00],
-      [0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00],
-      [0x03, 0x03, 0x01, 0x00, 0x00, 0x00, 0x00]
-    ];
-
-    writeSerial( logCmd[0] )
-      .then(function(r){
-        return writeSerial( logCmd[1] );
-      })
-      .then(function(r){
-        return writeSerial( logCmd[2] );
-      }).then(function(){
-        console.log('Logging enabled on all three busses');
-      });
-  });
-
-
+function handleSerialData(data) {
+  var readPacket = new Buffer(data, 'ascii');
+  if( readPacket[0] == 0x03 )
+    writePacket( readPacket );
 }
 
 
@@ -82,45 +110,53 @@ function writeSerial(data){
 
 
 
-var pcapHeader = new Buffer( [0xa1, 0xb2, 0xc3, 0xd4, // Magic number [Big Endian]
-                              0x00, 0x02, 0x00, 0x04, // Version (2.4)
-                              0x00, 0x00, 0x00, 0x00, // thiszone
-                              0x00, 0x00, 0x00, 0x00, // GMT timezone
-                              0x00, 0x00, 0xFF, 0xFF, // Snapshot Length
-                              0x00, 0x00, 0x00, 0xE3, // network type (227 for SocketCAN)
-                            ]);
+// Setup pipes for all three busses.
+pipes.forEach(function(pipePath, index){
 
-var socket;
-var server = net.createServer(function(socketConnection) {
+  if(debug) console.info("Setup pipe: "+pipePath);
 
-    socket = socketConnection;
+  // Cleanup any old pipe file
+  if(fs.existsSync(pipePath)){
+    if(debug) console.info('cleaning up old pipe ', pipePath);
+    fs.unlinkSync(pipePath);
+  }
 
-    // Write header
-    socketConnection.write(pcapHeader);
 
-    console.log('client connected');
+  var server = net.createServer(function(socketConnection) {
 
-    socketConnection.on('data', function(data) {
-    });
+      // socket = socketConnection;
+      sockets[index] = socketConnection;
 
-    socketConnection.on('end', function(error) {
-      console.log('client disconnected');
-      socket = null;
-    });
+      // Write header
+      socketConnection.write(pcapHeader);
 
-    socketConnection.on('error', function(error) {
-      console.log("Socket Error "+error);
-      process.exit();
-    });
+      console.log('Client connected to '+pipePath);
+
+      socketConnection.on('data', function(data) {
+      });
+
+      socketConnection.on('end', function(error) {
+        console.log('Client disconnected');
+        sockets[index] = null;
+      });
+
+      socketConnection.on('error', function(error) {
+        console.log(error);
+        process.exit();
+      });
+
+  });
+
+  servers[index] = server;
+
+  // New pipe
+  server.listen(pipePath, function(){
+    console.log('Socket bound: ' + pipePath);
+  });
+
 
 });
 
-
-var pipe = process.platform == 'win32' ? '\\\\?\\pipe\\cbtbus1':'/tmp/cbtbus1';
-
-server.listen(pipe, function(){
-  console.log('Socket bound: '+pipe);
-});
 
 // listen for TERM signal .e.g. kill
 process.on('SIGTERM', gracefulShutdown);
@@ -135,8 +171,11 @@ process.on('SIGINT', gracefulShutdown);
 
 
 function gracefulShutdown(){
-  console.log('About to exit, closing server.');
-  server.close();
+  console.log('About to exit, closing servers.');
+
+  servers.forEach(function(server, index){
+    server.close();
+  });
 
   process.exit();
 }
@@ -159,6 +198,7 @@ function writePacket(data){
 
 
   // Build Packet data
+  var busId = data[1]-1;
   var packet = new Buffer(8 + data[12]).fill(0);
 
   // Message ID
@@ -179,17 +219,22 @@ function writePacket(data){
   if(debug) console.log( 'Packet Data: ', packet.toString('hex'), packet.length );
 
   // Write to socket
-  if(socket){
-    socket.write(header);
-    socket.write(packet);
+  if( sockets[busId] ){
+    sockets[busId].write(header);
+    sockets[busId].write(packet);
   }
 
 
 
 }
 
+function stop(){
+  serialPort.removeListener('data', handleSerialData);
+}
+
 
 
 module.exports = {
-  init: init
+  init: init,
+  stop: stop
 };

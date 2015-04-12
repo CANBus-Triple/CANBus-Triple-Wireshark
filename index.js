@@ -16,9 +16,15 @@ var serialPort = new SerialPort(process.argv[2], {
   disconnectedCallback: function(){ process.exit(); }
 });
 
-serialPort.on('error', function(err){
-  console.error('\033[31m'+err+'\033[0m');
-  process.exit();
-});
+serialPort.on("open", function(){
 
-adapter.init(serialPort, false);
+  serialPort.on('error', function(err){
+    console.error('\033[31m'+err+'\033[0m');
+    process.exit();
+  });
+
+
+  var pipeNames = adapter.init(serialPort, false);
+
+
+});
